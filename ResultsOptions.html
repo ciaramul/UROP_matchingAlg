@@ -1,0 +1,35 @@
+
+{% extends "global/Page.html" %}
+{% load staticfiles otree_tags %}
+
+{% block title %} Slot Machine Game in Progress {% endblock %}
+
+{% block content %}
+    {% block results %}
+        <h1>
+            {% if Subsession.round_number != 1: %}
+                Outcomes of Last Round
+            {% else %}
+                Payout from your Initial Slot Machine
+        </h1>
+
+        <p>
+            {% if Subsession.round_number != 1: %}
+                Last round you earned: {{c(player.payoff)}}
+            {% else %}
+                This slot machine delivered: {{player.payoff}}
+        </p>
+
+        <p> That brought your balance to {{ player.payout_acc }} </p>
+
+    {% endblock %}
+
+
+    {% block play %}
+        {% if Subsession.round_number != Constants.num_rounds%}
+            { % formfield player.offer_accepted with label= "Which play do you choose this round?" %}
+    {% endblock %}
+
+    {% include Constants.instructions_template %}
+
+{% endblock %}
