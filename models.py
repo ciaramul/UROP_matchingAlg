@@ -4,6 +4,7 @@ from otree.api import (
 )
 # import below for defining custom models: match to save the player-slot machine-payoff combinations
 from otree.db.models import Model, ForeignKey
+import random
 
 
 author = 'Ciara Mulcahy'
@@ -31,19 +32,14 @@ def assign_payoffs(self):
     # generate set of potential payoffs
     potPayoffs = set()
     for s in range(1, Constants.num_sm + 1):
-        potPayoffs.add(random.randfloat())
+        potPayoffs.add(random.lognormvariate(.75, .20))
 
     # assign payoffs to player ids in a group
-    rankings = {}       # rn for deterministic case, might change for probabilistic
     for p_id in range(1, Constants.players_per_group + 1):
-        tempList = []
         for sm_id in range(Constants.num_sm):
             # make an instance of Match with the given player id in group and slot machine
             pay = potPayoffs.pop()
-            Match.make_match(p_id, sm_id, pay )
-            tempList.append(Match.get_payoff(p_id, sm_id))
-        # Make a dictionary ranking the advantageousness of each sm for a player id
-        rankings[p_id] = sorted(tempList)
+            ForeignKey.Match.make_match(p_id, sm_id, pay)
 
 
 class Constants(BaseConstants):
@@ -58,26 +54,25 @@ class Constants(BaseConstants):
     num_sm = players_per_group + num_rounds
 
     payout_max = 1.00
-    quit_pay = 1.50
+    init_quit_pay = 1.50
+    dec_quit_pay = .45
 
 
 class Subsession(BaseSubsession):
     def before_session_starts(self):
         if self.round_number == 1:
-            # the players can be associated with payoff permanently and participants
-            #   can decide each round if they are switching players or not
 
             # assign groups
             self.group_randomly(fixed_id_in_group=True)
 
-            for p in self.get_players():
-                p.participant.vars['alg'] = random.choice(['fair', 'self'])
+            # assign matching algorithm to each group
             groups = self.get_groups()
-
-            # cycle through groups to assign payoffs to play
             for g in groups:
-                for p in g.get_players():
-                    p.payoff = Match.get_payoff(p.id_in_group, p.slotMachineCurrent)
+                g.vars['alg'] = random.choice(['fair', 'self', 'rand'])
+
+            # cycle through groups to initially assign players to slot machines
+            for g in groups:
+                g.reassign(g.get_players())
 
         else:
             self.group_like_round(1)
@@ -91,26 +86,66 @@ class Group(BaseGroup):
     # Group means treatment group(but players are interacting), so fair or selfish matching algorithm applied
     alg = models.CharField()
 
+    # Handle slot machines for checking players' options
+    potSlots = list(range(Constants.num_sm))
+    occupied = set()
+
+
     def after_round(self):
+        switching = []
         players = self.get_players()
 
         for p in players:
             if p.statusActive:
                 if p.offer_accepted == 3:
                     p.statusActive = False
+                    self.occupied.remove(p.slotMachineCurrent) # sm no longer occupied
                     p.quit_payoff()
                 elif p.offer_accepted == 2:
-                    if self.alg == 'Fair':
-                        # need to make probabilistic, but deterministic for now
-
-                    elif self.alg == 'Selfish':
-
-
-                    # insert some slot machine switching code
-                        # new slot machine must be unoccupied
-                    p.payoff = Match.get_payoff(p.id_in_group, p.slotMachineCurrent)
+                    self.occupied.remove(p.slotMachineCurrent)
+                    switching.append(p.id_in_group)
+                    # will handle slot machine reassignment and payout in reassign funct below [greedy alg]
                 elif p.offer_accepted == 1:
                     p.payout_accepted += p.payoff
+
+        self.reassign(switching)
+
+    def reassign(self, switching):          # use for initial matching and switching cases
+        # reassign slot machines and provide payout for those switching
+        groupSMavailable = []
+        for sm_id in self.potSlots:
+            if sm_id not in self.occupied:
+                groupSMavailable.append(sm_id)
+
+        for p2 in random.shuffle(switching):
+            # parameters required are available slot machines
+            playerSMavailable = []
+
+            for sm_id in groupSMavailable:
+                if sm_id not in p2.slotMachinesPrev:
+                    if sm_id not in self.occupied:      # recheck for assignments of other switching players
+                        playerSMavailable.append(sm_id)
+            # payouts associated with different slot machines
+            payouts = {}
+            for sm_id in playerSMavailable:
+                payouts[ForeignKey.Match.get_payoff( p2, sm_id)] = sm_id
+
+            # reassign slot machines - add sm to occupied and change p2's value for currentSM
+            if self.alg == 'fair':
+                # need to make probabilistic, but deterministic for now
+                newSMpay = max(payouts.keys())
+            elif self.alg == 'rand':
+                newSMpay = random.choice (payouts.keys())
+            elif self.alg == 'self':
+                newSMpay = random.choice(payouts.keys())    # change this later
+
+            slotMach_id = payouts[newSMpay]
+            p2.slotMachineCurrent = slotMach_id  # assign sm to player
+            self.occupied.add(slotMach_id)        # note that sm is now occupied
+            p2.slotMachinesPrev.append(slotMach_id)     #note that player cannot return to this sm
+
+            # payout the payoffs
+            p2.payoff = ForeignKey.Match.get_payoff(p2.id_in_group, p2.slotMachineCurrent)
 
 
 class Player(BasePlayer):
@@ -124,25 +159,15 @@ class Player(BasePlayer):
             [1, 'Return to same slot machine'],
             [2, 'Switch slot machines'],
             [3, 'Quit this game'],
-        ]
+        ], initial = 2
     )
 
-    # make the matching with players and sm implementation in views.py
+    # record the slot machine ids with which the player has matched
+    slotMachinesPrev = set()
 
     def quit_payoff(self):
-        self.participant.payoff = Constants.quit_pay
-
-
-class SlotMachine(Model):
-    group = ForeignKey(Group)
-    id = models.PositiveIntegerField()
-    occupied = models.BooleanField()
-
-    # record the player ids with which the slot machine has matched
-    players = []
-
-
-
-
-
+        if Subsession.round_number == 1:
+            self.participant.payoff = Constants.init_quit_pay
+        else:
+            self.participant.payoff += Constants.init_quit_pay - (Subsession.round_number - 1)* Constants.dec_quit_pay
 
