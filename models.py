@@ -45,9 +45,9 @@ class Subsession(BaseSubsession):
 
             # make session-global payoff_dict to store data for selfish alg
             self.session.vars['payoff_dict'] = {}
-            init_visit_list = [0,0]        # [times switched away from, times received this payout]
+            init_visit_list = [0,0]        # [times switched away from, times accessed] this payout
             for _ in range(Constants.num_sm):
-                self.session.vars['payoff_dict'][c(numpy.random.randint(low=0, high=100))] = init_visit_list
+                self.session.vars['payoff_dict'][str(numpy.random.randint(low=0, high=100))] = init_visit_list
 
             # assign payoffs to player ids in a group
             for p_id in range(1, Constants.players_per_group + 1):
@@ -115,7 +115,7 @@ class Group(BaseGroup):
     def reassign(self):          # use for initial matching and switching cases
         # reassign slot machines and provide payout for those switching
 
-        # work around to Store group's variable lists and sets
+        # work around to store group's variable lists and sets
         data_store_player = self.get_player_by_id(1)
 
         switching = data_store_player.participant.vars['switching']
@@ -171,8 +171,8 @@ class Group(BaseGroup):
             p.participant.vars['slotMachinesPrev'].add(slot_mach_id)     # note that player cannot return to this sm
 
             # payout the payoffs
-            #p.payoff = c(numpy.random.normal(loc=newSMpay, scale=Constants.sd_payoffs))
-            p.payoff = newSMpay
+            #p.payoff = numpy.random.normal(loc=newSMpay, scale=Constants.sd_payoffs)
+            p.payoff = int(newSMpay)
 
     def before_next_round(self):
 
@@ -190,10 +190,10 @@ class Group(BaseGroup):
                     occupied.remove(p.slotMachineCurrent)
                     switching.append(p.id_in_group)
                     # will handle slot machine reassignment and payout in reassign funct below [greedy alg]
-                    self.session.vars['payoff_dict'][p.mean_payoff_current][0] += 1
+                    self.session.vars['payoff_dict'][str(p.mean_payoff_current)][0] += 1
                 elif p.offer_accepted == 1:
                     p.payoff = numpy.random.normal(loc = p.mean_payoff_current, scale = Constants.sd_payoffs)
-                    self.session.vars['payoff_dict'][p.mean_payoff_current][-1] += 1      # fix these counts later
+                    self.session.vars['payoff_dict'][str(p.mean_payoff_current)][-1] += 1      # fix these counts later
 
         self.reassign()
 
