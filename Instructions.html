@@ -1,21 +1,44 @@
 
-{% load otree_tags staticfiles %}
+{% load otree_tags %}
 
 <div class="instructions well well-lg">
 
     <h3 class="panel-sub-heading">
-        Instructions
+        Scenario
     </h3>
 
     <p>
-        You are in a group of {{ Constants.players_per_group }} people.
-        Each of you will be matched with one of {{ Constants.num_machines }}
-        slot machines that will deliver a payout of between $0.00 and {{ Constants.payout_max }}.
+        You are in a group of {{Constants.players_per_group}} people.
+        Each of the participants in your group will be matched with one of {{Constants.num_sm}}
+        slot machines that will deliver a payout of between {{0|c}} and {{ Constants.payout_max|c }}.
         Each round you can select to return to the same slot machine, switch slot machines, or quit the game
-        entirely for a total payout of {{ Constants.quit_pay }} dollars.
+        entirely.
+    </p>
+    <p> On the selection page, you will have {{ Constants.timeout_seconds }} seconds to make your decision.
+        If you allow the game to timeout, you will, by default, quit the game.</p>
+
+    <p>This game will be played for {{Constants.num_rounds}} rounds.</p>
+
+    <h4> Returning to the Same Slot Machine</h4>
+    <p>
+        The same slot machine will fluctuate in payout slightly between rounds, but will return a constant average payout
+        while you are accessing it.
     </p>
 
-    <p>This game will be played for {{ Constants.num_rounds }} rounds.</p>
+    <h4> Switching Slot Machines</h4>
+    <p>
+        If you choose to switch slot machines, you will be matched with one of the {{Constants.num_sm}} slot machines
+        in your group that you have not accessed previously and that is not occupied by another member of your group.
+    </p>
 
-    <p>If you consent to playing and proceed with this game, click 'Next'</p>
+    <h4> Quitting the Game </h4>
+    <p>
+        If you elect to quit the game or allow the game to timeout, you will receive a constant amount
+        added to your total payout, but will not participate in subsequent rounds.
+    </p>
+    <p>
+        If you choose to quit the first round, you will receive {{Constants.init_quit_pay|c }}.
+        For every round you play, this compensation upon quitting will decrease by {{Constants.dec_quit_pay|c}}.
+    </p>
+
 </div>
