@@ -15,7 +15,7 @@ remain at the same slot machine, switch slot machines, or quit the game entirely
 
 class Constants(otree.api.BaseConstants):
     name_in_url = 'SlotMachines'
-    num_groups = 3
+    num_groups = 3      # change this to handle super-grouping
     timeout_seconds = 100
 
     instructions_template = 'matchingAlg/Instructions.html'\
@@ -45,33 +45,42 @@ class Subsession(otree.api.BaseSubsession):
             # make session-global payoff_dict to store data for selfish alg
             self.session.vars['payoff_dict'] = {}
             init_visit_list = [0,0]        # [times switched away from, times accessed] this payout
-            for _ in range(Constants.num_sm):
-                pay_amt = int(numpy.random.pareto(.5))
-                # pay_amt = random.randint(0, Constants.payout_max)
-                self.session.vars['payoff_dict'][pay_amt] = init_visit_list
-                # this needs to be fixed to ensure that enough payouts are assigned and even distribution etc
+            for super_group in range(1, Constants.num_groups + 1):
+                self.session.vars['payoff_dict'][super_group] = {}
+                for _ in range(Constants.num_sm):
+                    pay_amt = int(numpy.random.pareto(.5))
+                    # pay_amt = random.randint(0, Constants.payout_max)
+                    self.session.vars['payoff_dict'][super_group][pay_amt] = init_visit_list
+                    # this needs to be fixed to ensure that enough payouts are assigned and even distribution etc
 
             # assign payoffs to player ids across groups
             self.session.vars['combinations'] = {}
-            for p_id in range(1, Constants.players_per_group + 1):
-                # regenerate the potential payouts between players, should not affect session.vars
-                player_pay = self.session.vars['payoff_dict'].keys()
-                self.session.vars['combinations'][p_id] = {}
-                for sm_id in range(1, Constants.num_sm + 1):
-                    pay = int(numpy.random.choice(list(player_pay), replace=False))
-                    self.session.vars['combinations'][p_id][sm_id] = pay
+            for super_group in range(1, Constants.num_groups + 1):
+                self.session.vars['combinations'][super_group] = {}
+                for p_id in range(1, Constants.players_per_group + 1):
+                    # regenerate the potential payouts between players, should not affect session.vars
+                    player_pay = self.session.vars['payoff_dict'][super_group].keys()
+                    self.session.vars['combinations'][super_group][p_id] = {}
+                    for sm_id in range(1, Constants.num_sm + 1):
+                        pay = int(numpy.random.choice(list(player_pay), replace=False))
+                        self.session.vars['combinations'][super_group][p_id][sm_id] = pay
 
             # assign matching algorithm to each group
             groups = self.get_groups()
             alg = itertools.cycle(['fair', 'self', 'rand'])
+            count = 3
             for g in groups:
                 g.alg = next(alg)
+                g.super_group = count / 3
+                player_scribe = g.get_player_by_id(1)
+                player_scribe.participant.vars["super_group"] = count/3
+                count += 1
+
                 # initially activate players instances
                 for p in g.get_players():
                     p.participant.vars['slotMachinesPrev'] = set()
                     p.participant.vars['statusActive'] = True
 
-                player_scribe = g.get_player_by_id(1)
                 g.switching = json.dumps(list(range(1, Constants.players_per_group + 1)))   # all 'switch' 1st round
                 player_scribe.participant.vars['occupied'] = set()  # no slot machines are occupied yet
 
@@ -86,10 +95,12 @@ class Subsession(otree.api.BaseSubsession):
                 prev_round = self.round_number-1
                 g.alg = g.in_round(prev_round).alg  # group keeps the same matching alg [treatment]
                 g.switching = []
+                g.super_group = g.in_round(prev_round).super_group
 
 
 class Group(otree.api.BaseGroup):
     # Group means treatment group(but players are interacting), so fair or selfish matching algorithm applied
+    super_group = otree.api.models.PositiveIntegerField()       # associated with a set of pot payoffs
     alg = otree.api.models.CharField()
     switching = otree.api.models.CharField()
 
@@ -110,10 +121,10 @@ class Group(otree.api.BaseGroup):
                     occ.remove(p.participant.vars['slotMachineCurrent'])   # sm no longer occupied
                     this_switch.append(p.id_in_group)
                     # will handle slot machine reassignment and payout in reassign function below [greedy alg]
-                    self.session.vars['payoff_dict'][p.mean_payoff_current][0] += 1
+                    self.session.vars['payoff_dict'][self.super_group][p.mean_payoff_current][0] += 1
                 elif p.in_round(prev_round).offer_accepted == 1:  # remain
                     p.payoff = numpy.random.normal(loc=p.mean_payoff_current, scale=Constants.sd_payoffs)
-                    self.session.vars['payoff_dict'][p.mean_payoff_current][-1] += 1  # fix these counts later
+                    self.session.vars['payoff_dict'][self.super_group][p.mean_payoff_current][-1] += 1  # fix these counts later
                     p.current_slot_machine_id = json.dumps(p.participant.vars['slotMachineCurrent'])
 
         self.switching = json.dumps(this_switch)
@@ -153,8 +164,7 @@ class Group(otree.api.BaseGroup):
             p.participant.vars['slotMachinesPrev'].add(slot_mach_id)     # note that player cannot return to this sm
 
             # payout the payoffs
-            # p.payoff = numpy.random.normal(loc=newSMpay, scale=Constants.sd_payoffs)
-            p.payoff = int(newSMpay)
+            p.payoff = numpy.random.normal(loc=newSMpay, scale=Constants.sd_payoffs)
 
 
 class Player(otree.api.BasePlayer):
@@ -184,7 +194,7 @@ class Player(otree.api.BasePlayer):
         player_scribe = self.group.get_player_by_role(1)
         groups_occupied = player_scribe.participant.vars['occupied']
         p_id = self.participant.vars['role']
-        poten_combos = copy.deepcopy(self.session.vars['combinations'][p_id])
+        poten_combos = copy.deepcopy(self.session.vars['combinations'][self.group.super_group][p_id])
 
         prev_slot_mach = self.participant.vars['slotMachinesPrev']
         sm_id_options = list(poten_combos.keys())
