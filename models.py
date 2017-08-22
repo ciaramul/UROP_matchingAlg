@@ -18,18 +18,20 @@ class Constants(otree.api.BaseConstants):
     num_groups = 3      # change this to handle super-grouping
     timeout_seconds = 100
 
-    instructions_template = 'matchingAlg/Instructions.html'\
+    instructions_template = 'matchingAlg/Instructions.html'
+    # reference the (matching algorithm and payout generation) file here
 
     # Can manipulate the variables below
-    players_per_group = 3
-    num_rounds = 3
+    players_per_group = 4
+    num_rounds = 10
+
     num_sm = players_per_group + num_rounds
     potSlots = list(range(1, num_sm+1))
 
     payout_max = 20
     sd_payoffs = 5
     init_quit_pay = 7*num_rounds
-    dec_quit_pay = 8
+    dec_quit_pay = 7
 
 
 class Subsession(otree.api.BaseSubsession):
@@ -67,13 +69,13 @@ class Subsession(otree.api.BaseSubsession):
 
             # assign matching algorithm to each group
             groups = self.get_groups()
-            alg = itertools.cycle(['fair', 'self', 'rand'])
-            count = 3
+            alg = itertools.cycle(['fair', 'self'])
+            count = 2
             for g in groups:
                 g.alg = next(alg)
-                g.super_group = count / 3
+                g.super_group = count // 2
                 player_scribe = g.get_player_by_id(1)
-                player_scribe.participant.vars["super_group"] = count/3
+                player_scribe.participant.vars["super_group"] = count//2
                 count += 1
 
                 # initially activate players instances
@@ -116,7 +118,7 @@ class Group(otree.api.BaseGroup):
                 if p.in_round(prev_round).offer_accepted == 3:  # quit
                     p.participant.vars['statusActive'] = False
                     occ.remove(p.participant.vars['slotMachineCurrent'])  # sm no longer occupied
-                    p.quit_payoff()
+                    p.participant.payoff += p.quit_payoff()
                 elif p.in_round(prev_round).offer_accepted == 2:  # switch
                     occ.remove(p.participant.vars['slotMachineCurrent'])   # sm no longer occupied
                     this_switch.append(p.id_in_group)
@@ -146,8 +148,6 @@ class Group(otree.api.BaseGroup):
             if self.alg == 'fair':
                 # need to make probabilistic, but deterministic for now
                 newSMpay = max(players_pot_payouts.values())
-            elif self.alg == 'rand':
-                newSMpay = random.choice(list(players_pot_payouts.values()))
             elif self.alg == 'self':
                 newSMpay = random.choice(list(players_pot_payouts.values()))    # change this later
             else:
@@ -189,7 +189,7 @@ class Player(otree.api.BasePlayer):
     )
     # record the slot machine ids with which the player has matched as self.participant.vars['slotMachinesPrev']
 
-    # make payout dictionary of the player
+    # make payout dictionary of the player - algorithm file may make this inappropriate
     def make_payoff_dict(self):
         player_scribe = self.group.get_player_by_role(1)
         groups_occupied = player_scribe.participant.vars['occupied']
@@ -209,7 +209,4 @@ class Player(otree.api.BasePlayer):
 
     # linear decrease in quitting payout across rounds
     def quit_payoff(self):
-        if self.round_number == 1:
-            self.participant.payoff = Constants.init_quit_pay
-        else:
-            self.participant.payoff += Constants.init_quit_pay - (self.round_number - 1)* Constants.dec_quit_pay
+        return Constants.init_quit_pay - (self.round_number - 1)* Constants.dec_quit_pay
