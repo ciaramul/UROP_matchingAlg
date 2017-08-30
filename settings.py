@@ -22,7 +22,7 @@ ADMIN_USERNAME = 'admin'
 ADMIN_PASSWORD = environ.get('OTREE_ADMIN_PASSWORD')
 
 # don't share this with anybody.
-SECRET_KEY = '{{ secret_key }}'
+SECRET_KEY = 'y)wqcu5u8u#di7chci+6k%ol8!*25vil)9_&&fa+4-iuc=zjbm'
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -102,7 +102,7 @@ mturk_hit_settings = {
 # e.g. self.session.config['participation_fee']
 
 SESSION_CONFIG_DEFAULTS = {
-    'real_world_currency_per_point': 0.000,
+    'real_world_currency_per_point': 0.01,
     'participation_fee': 0.00,
     'doc': "",
     'mturk_hit_settings': mturk_hit_settings,
@@ -117,11 +117,23 @@ SESSION_CONFIGS = [
     #     'app_sequence': ['...'],
     # }
     {
+        'name' : 'matchingPlanets',
+        'display_name': 'Interplanetary Enterprise',
+        'num_demo_participants': 8,
+        'app_sequence': ['matchingAlg', 'survey'],
+    },
+    {
+        'name' : 'surveyTest',
+        'display_name': 'Exit Survey',
+        'num_demo_participants': 1,
+        'app_sequence': ['survey'],
+    },
+{
         'name' : 'matchingAlg',
         'display_name': 'Slot Machines',
-        'num_demo_participants': 9,
-        'app_sequence': ['matchingAlg', 'survey'],
-    }
+        'num_demo_participants': 8,
+        'app_sequence': ['matchingAlg'],
+    },
 ]
 
 # anything you put after the below line will override

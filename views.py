@@ -2,7 +2,7 @@ from otree.api import Currency as c, currency_range
 from . import models
 from ._builtin import Page, WaitPage
 from .models import Constants
-from django.forms import modelformset_factory
+import json
 
 
 class MyPage(Page):
@@ -23,16 +23,21 @@ class ResultsWaitPage(Page):
 
     def vars_for_template(self):
         return {'status': self.player.in_round(self.round_number-1).offer_accepted,
-                'image_path': "matchingAlg\play{}.jpg".format(self.player.in_round(self.round_number-1).offer_accepted)}
+                'image_path': "matchingAlg\play{}.jpg".format(self.player.in_round(self.round_number-1).offer_accepted),
+                }
 
 
 class ResultsOptions(Page):
     """Player: Choose whether to return, switch, or quit slot machines"""
     def vars_for_template(self):
+        with open("matchingAlg/static/matchingAlg/image_credits.json") as source:
+            credit_source = json.loads(source.read())
         return {'balance': sum([p.payoff for p in self.player.in_all_rounds()]),
                 'rounds_remaining': Constants.num_rounds - self.round_number,
-                'image_path': "matchingAlg\{}.jpg".format(self.player.current_slot_machine_id),
-                'quit_pay': self.player.quit_payoff()}
+                'image_path': "matchingAlg/{}.jpg".format(self.player.current_slot_machine_id),
+                'image_credit': credit_source[str(self.player.current_slot_machine_id)],
+                'quit_pay': self.player.quit_payoff()
+                }
 
     form_model = models.Player
     form_fields = ['offer_accepted']
